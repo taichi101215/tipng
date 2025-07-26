@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<title>格闘タイピングゲーム（必殺技演出付き）</title>
+<style>
+  body {
+    background: black;
+    color: white;
+    font-family: 'Arial', sans-serif;
+    text-align: center;
+    user-select: none;
+  }
+  #info, #score-board {
+    margin: 10px;
+    font-size: 1.2em;
+  }
+  #game-container {
+    position: relative;
+    width: 700px;
+    height: 300px;
+    margin: 30px auto;
+    background:
+      linear-gradient(to top, #333 0%, #111 50%, #222 100%);
+    border: 3px solid #555;
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  /* 画面揺れアニメーション */
+  #game-container.shake {
+    animation: shake 0.3s;
+  }
+  @keyframes shake {
+    0% { transform: translate(0, 0) rotate(0deg); }
+    10% { transform: translate(-5px, 3px) rotate(-2deg); }
+    20% { transform: translate(4px, -3px) rotate(2deg); }
+    30% { transform: translate(-3px, 3px) rotate(-1deg); }
+    40% { transform: translate(2px, -2px) rotate(1deg); }
+    50% { transform: translate(-1px, 1px) rotate(0deg); }
+    60% { transform: translate(2px, -1px) rotate(1deg); }
+    70% { transform: translate(-2px, 2px) rotate(-1deg); }
+    80% { transform: translate(3px, -3px) rotate(2deg); }
+    90% { transform: translate(-4px, 2px) rotate(-2deg); }
+    100% { transform: translate(0, 0) rotate(0deg); }
+  }
+  /* --- ここから下は前のコードのまま省略 --- */
+  .fighter {
+    position: absolute;
+    bottom: 30px;
+    width: 140px;
+    height: 180px;
+    background: #222;
+    border: 2px solid #555;
+    border-radius: 8px;
+  }
+  #player {
+    left: 80px;
+    background: linear-gradient(135deg, #204080 0%, #3060b0 100%);
+    box-shadow: 0 0 12px #50a0ff;
+    transition: transform 0.3s ease;
+  }
+  #enemy {
+    right: 80px;
+    background: linear-gradient(135deg, #802020 0%, #b03030 100%);
+    box-shadow: 0 0 12px #ff5050;
+    transition: transform 0.3s ease;
+  }
+  .face {
+    position: relative;
+    top: 25px;
+    width: 100px;
+    height: 100px;
+    margin: 0 auto;
+    background: #ddd;
+    border-radius: 50%;
+    box-shadow: inset 0 0 8px #aaa;
+  }
+  .eye {
+    position: absolute;
+    top: 38px;
+    width: 15px;
+    height: 15px;
+    background: black;
+    border-radius: 50%;
+  }
+  .eye.left { left: 23px; }
+  .eye.right { right: 23px; }
+  .arm {
+    position: absolute;
+    bottom: 20px;
+    width: 40px;
+    height: 90px;
+    background: #444;
+    border-radius: 20px;
+    left: 10px;
+    transform-origin: top center;
+    transition: transform 0.3s ease;
+    box-shadow: inset 0 0 10px #666;
+  }
+  .arm.right {
+    left: auto;
+    right: 10px;
+  }
+  #player.player-attack {
+    animation: punch 0.4s ease forwards;
+  }
+  @keyframes punch {
+    0% { transform: translateX(0); }
+    50% { transform: translateX(40px) rotate(15deg); }
+    100% { transform: translateX(0) rotate(0); }
+  }
+  #player.player-super-attack {
+    animation: superpunch 0.7s ease forwards;
+  }
+  @keyframes superpunch {
+    0% { transform: translateX(0) rotate(0); box-shadow: 0 0 12px #50a0ff;}
+    30% { transform: translateX(60px) rotate(30deg) scale(1.2); box-shadow: 0 0 25px #ffff55;}
+    60% { transform: translateX(50px) rotate(20deg) scale(1.15); box-shadow: 0 0 20px #ffff55;}
+    100% { transform: translateX(0) rotate(0) scale(1); box-shadow: 0 0 12px #50a0ff;}
+  }
+  #enemy.hit-flash {
+    animation: hitflash 0.4s ease;
+  }
+  @keyframes hitflash {
+    0% { background-color: #b03030; }
+    50% { background-color: #ff8080; }
+    100% { background-color: #b03030; }
+  }
+  #enemy.dead {
+    animation: fallen 1s forwards;
+  }
+  @keyframes fallen {
+    0% { transform: translateY(0) rotate(0deg); opacity: 1; }
+    100% { transform: translateY(100px) rotate(90deg); opacity: 0; }
+  }
+  #playerFace.angry .eye {
+    background: #f00;
+  }
+  #enemyFace.hurt {
+    background: #800000;
+  }
+  #word {
+    font-size: 2em;
+    margin-top: 20px;
+    min-height: 50px;
+  }
+  #input {
+    font-size: 1.5em;
+    width: 300px;
+    padding: 6px;
+    border-radius: 6px;
+    border: none;
+    outline: none;
+  }
+  #result {
+    margin-top: 15px;
+    font-size: 1.2em;
+    height: 24px;
+  }
+  #flash {
+    pointer-events: none;
+    position: fixed;
+    top:0; left:0; right:0; bottom:0;
+    z-index: 9999;
+    background: transparent;
+  }
+  button {
+    margin-top: 20px;
+    font-size: 1.2em;
+    padding: 8px 16px;
+    border-radius: 8px;
+    border: none;
+    background: #3080f0;
+    color: white;
+    cursor: pointer;
+    user-select: none;
+  }
+  button:disabled {
+    background: #555;
+    cursor: not-allowed;
+  }
+</style>
+</head>
+<body>
+
+<h1>格闘タイピングゲーム（必殺技演出付き）</h1>
+
+<div id="info">
+  時間：<span id="timer">60</span>秒 | コンボ：<span id="combo">0</span> / 10
+</div>
+
+<div id="score-board">
+  スコア：<span id="score">0</span> | ハイスコア：<span id="highscore">0</span>
+</div>
+
+<div id="game-container">
+  <div id="player" class="fighter">
+    <div class="face" id="playerFace">
+      <div class="eye left"></div>
+      <div class="eye right"></div>
+    </div>
+    <div class="arm"></div>
+  </div>
+  <div id="enemy" class="fighter">
+    <div class="face" id="enemyFace">
+      <div class="eye left"></div>
+      <div class="eye right"></div>
+    </div>
+    <div class="arm right"></div>
+  </div>
+</div>
+
+<div id="word">スペースキーまたはボタンでスタート！</div>
+<input type="text" id="input" disabled autocomplete="off" />
+<div id="result"></div>
+<button id="startBtn">スタート</button>
+
+<div id="flash"></div>
+
+<script>
+  const words = [
+    "こんにちは","ありがとう","さようなら","すみません","おはよう","がんばって","ねこ","いぬ","すし","やまだ",
+    "たなか","ほん","みず","せんせい","がくせい","でんわ","じてんしゃ","くるま","とけい","おかね",
+    "くだもの","やさい","ごはん","らーめん","かれー","ともだち","かぞく","がっこう","にほん","せかい",
+    "そら","うみ","やま","かわ","はな","どうぶつ","さかな","かえる","ぞう","らいおん",
+    "とら","ぶた","にわとり","たまご","ぱん","じゅーす","みかん","りんご","ばなな","もも",
+    "すいか","なし","いちご","かぼちゃ","にんじん","たまねぎ","とまと","きゃべつ","れたす","ぴーまん",
+    "こーん","とうもろこし","にら","しょうが","にんにく","しお","こしょう","しょうゆ","とりにく","ぶたにく"
+  ];
+
+  const input = document.getElementById('input');
+  const wordElem = document.getElementById('word');
+  const timerElem = document.getElementById('timer');
+  const scoreElem = document.getElementById('score');
+  const resultElem = document.getElementById('result');
+  const startBtn = document.getElementById('startBtn');
+  const player = document.getElementById('player');
+  const enemy = document.getElementById('enemy');
+  const playerFace = document.getElementById('playerFace');
+  const enemyFace = document.getElementById('enemyFace');
+  const flash = document.getElementById('flash');
+  const highscoreElem = document.getElementById('highscore');
+  const comboElem = document.getElementById('combo');
+  const gameContainer = document.getElementById('game-container');
+
+  let currentWord = '';
+  let score = 0;
+  let timeLeft = 60;
+  let timer;
+  let enemyHP = 150;
+  let highscore = parseInt(localStorage.getItem('highscore') || "0");
+  let combo = 0;
+  let canInput = true;
+
+  highscoreElem.textContent = highscore;
+  comboElem.textContent = combo;
+
+  function pickWord() {
+    return words[Math.floor(Math.random() * words.length)];
+  }
+
+  function updateWord() {
+    currentWord = pickWord();
+    wordElem.textContent = currentWord;
+  }
+
+  function startGame() {
+    score = 0;
+    timeLeft = 60;
+    enemyHP = 150;
+    combo = 0;
+    canInput = true;
+    enemy.classList.remove('dead', 'hit-flash');
+    playerFace.classList.remove('angry', 'hurt');
+    enemyFace.classList.remove('hurt');
+    input.disabled = false;
+    input.value = '';
+    input.focus();
+    startBtn.disabled = true;
+    scoreElem.textContent = score;
+    timerElem.textContent = timeLeft;
+    comboElem.textContent = combo;
+    resultElem.textContent = '';
+    updateWord();
+
+    timer = setInterval(() => {
+      timeLeft--;
+      timerElem.textContent = timeLeft;
+      if (timeLeft <= 0) {
+        clearInterval(timer);
+        input.disabled = true;
+        startBtn.disabled = false;
+
+        if (enemyHP <= 0) {
+          resultElem.textContent = `🎉 クリア！たおした！スコア: ${score}`;
+        } else {
+          resultElem.textContent = `💀 タイムアップ！てきがいきのこった…スコア: ${score}`;
+        }
+
+        if (score > highscore) {
+          highscore = score;
+          localStorage.setItem('highscore', highscore);
+          highscoreElem.textContent = highscore;
+        }
+      }
+    }, 1000);
+  }
+
+  function flashScreen(color='rgba(255, 0, 0, 0.5)') {
+    flash.style.background = color;
+    setTimeout(() => {
+      flash.style.background = 'transparent';
+    }, 150);
+  }
+
+  // 画面揺れエフェクト
+  function shakeScreen() {
+    gameContainer.classList.add('shake');
+    setTimeout(() => {
+      gameContainer.classList.remove('shake');
+    }, 300);
+  }
+
+  function attackEnemy(damage) {
+    if (enemyHP <= 0) return;
+
+    enemyHP -= damage;
+    if (enemyHP < 0) enemyHP = 0;
+
+    enemy.classList.add('hit-flash');
+    enemyFace.classList.add('hurt');
+    flashScreen();
+    shakeScreen();
+
+    setTimeout(() => {
+      enemy.classList.remove('hit-flash');
+      enemyFace.classList.remove('hurt');
+    }, 400);
+
+    if (enemyHP <= 0) {
+      enemy.classList.add('dead');
+      enemyFace.classList.remove('hurt');
+    }
+  }
+
+  function onCorrectInput() {
+    if (!canInput) return;
+
+    score++;
+    scoreElem.textContent = score;
+
+    combo++;
+    comboElem.textContent = combo;
+
+    if (combo >= 10) {
+      canInput = false;
+      combo = 0;
+      comboElem.textContent = combo;
+      resultElem.textContent = "🔥 ひっさつわざはつどう！🔥";
+
+      player.classList.add('player-super-attack');
+      playerFace.classList.add('angry');
+
+      flashScreen('rgba(255, 255, 100, 0.8)');
+      shakeScreen();
+
+      setTimeout(() => {
+        attackEnemy(50);
+        player.classList.remove('player-super-attack');
+        playerFace.classList.remove('angry');
+        canInput = true;
+        resultElem.textContent = '';
+        input.value = '';
+        updateWord();
+      }, 700);
+
+    } else {
+      player.classList.add('player-attack');
+      attackEnemy(10);
+      shakeScreen();
+      setTimeout(() => {
+        player.classList.remove('player-attack');
+      }, 400);
+
+      input.value = '';
+      updateWord();
+    }
+  }
+
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
+      if (!canInput) return;
+      if (input.value.trim() === currentWord) {
+        onCorrectInput();
+      }
+    }
+  });
+
+  startBtn.addEventListener('click', () => {
+    startGame();
+  });
+
+  document.addEventListener('keydown', e => {
+    if (e.code === 'Space' && startBtn.disabled === false) {
+      startGame();
+    }
+  });
+</script>
+</body>
+</html>
